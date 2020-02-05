@@ -1,0 +1,105 @@
+---
+title: "Biodiversité en chiffre"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    theme: paper
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(readxl)
+library(tidyr)
+library(knitr)
+file = "C:/Users/demare.g/OneDrive - ORU OCCITANIE/uicn.xlsx"
+unci = read_xlsx(file, sheet = "UNCI Red list")
+estimed = read_xlsx(file, sheet = "UNCI Red list evaluated")
+```
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+### Informations Utiles
+
+__Les sources__
+
+Les données présentées sont issues de rapports publiés par l'Internation Union for the Natural Conservation (IUNC).
+Les chiffres 
+
+Source : [Number of threatened species](nc.iucnredlist.org/redlist/content/attachment_files/2019_2_RL_Table_1b.pdf)
+
+__Biodiversité__
+
+C'est la diversité des écosystèmes, des espèces et des gènes dans l'espace et dans le temps, ainsi que les interactions au sein de ces niveaux d'organisation et entre eux.
+
+__La Red List des espèces menacés__
+
+La red list est une échelle qui évaluent les risques de disparitions des êtres vivants. Ils sont classés sur une échelle de 8 niveaux en fonction de la valeur d'un indicateur est calculé avec les critères suivants :
+
+* Espèces.
+* Taille de la population.
+* Aire de répartition géographique.
+* Degré de peuplement.
+* Fragementation de la répartition géographique.
+
+Depuis 1, 754 espèces se sont éteintes.
+
+Column {data-width=600}
+-----------------------------------------------------------------------
+
+### Evolution du nombre d'espèces étudiés et menacés
+
+```{r}
+time = unci %>% 
+  group_by(year) %>%
+  summarise(described = sum(described, na.rm = T), threated = sum(threated, na.rm = T)) %>%
+ggplot() +
+  geom_area(aes(x = year, y = described), fill = "#9de17b") +
+  geom_line(aes(x = year, y = described), color = "#8ecb6e") +
+  geom_point(aes(x = year, y = described), color = "#8ecb6e") +
+  geom_area(aes(x = year, y = threated), fill = "#ffccd6") +
+  geom_line(aes(x = year, y = threated), color = "#feb0bf") +
+  geom_point(aes(x = year, y = threated), color = "#feb0bf") +
+  theme_minimal() 
+ggplotly(time)
+```
+
+
+### Espèces menacées par catégorie
+
+
+```{r}
+organisms = unci %>%
+  filter(year == 2019) %>%
+  mutate( organisms = substr(organisms, 1, 16) ) %>%
+  group_by(organisms) %>%
+  summarise(described = sum(described)-sum(threated), threated = sum(threated)) %>%
+  gather( key = "evalued", value = "species", 2:3) %>%
+  ggplot( aes( x = organisms, y = species, fill = evalued))  +
+  coord_flip() +
+  geom_col() +
+  scale_fill_manual( values = c("#8ecb6e", "#feb0bf") )+
+  theme_minimal() +
+  xlab("")
+ggplotly(organisms)
+```
+
+### Le types d'espèces vertébrés
+
+
+```{r}
+vertebrates = unci %>%
+  filter(year == 2019 & organisms == "VERTEBRATES") %>%
+  mutate(described = described-threated) %>%
+  gather( key = "evalued", value = "speciesNb", 5:6) %>%
+  ggplot( aes( x = reorder(species, speciesNb), y = speciesNb, fill = evalued))  +
+  coord_flip() +
+  geom_col() +
+  scale_fill_manual( values = c("#8ecb6e", "#feb0bf") )+
+  theme_minimal() +
+  xlab("")
+ggplotly(vertebrates)
+```
