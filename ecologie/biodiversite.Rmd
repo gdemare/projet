@@ -10,15 +10,32 @@ output:
 ```{r setup, include=FALSE}
 library(flexdashboard)
 library(dplyr)
+library(spdplyr)
 library(ggplot2)
 library(plotly)
 library(readxl)
 library(tidyr)
 library(knitr)
+library(leaflet)
+library(arules)
+library(sf)
+library(RColorBrewer)
+library(rgdal)
+library(MazamaSpatialUtils)
 file = "C:/Users/demare.g/OneDrive - ORU OCCITANIE/uicn.xlsx"
+#UNCI
 unci = read_xlsx(file, sheet = "UNCI Red list")
 estimed = read_xlsx(file, sheet = "UNCI Red list evaluated")
+threated = read_xlsx(file, sheet = "Threatened species country")
+#pays
+paysNom = read_xlsx("C:/Users/demare.g/OneDrive - ORU OCCITANIE/pays names.xlsx", sheet = "Feuil1") 
+# geolocalisation
+monde = readOGR("C:/Users/demare.g/OneDrive - ORU OCCITANIE/countries.geojson", stringsAsFactors = F,encoding = 'UTF-8')
 ```
+
+Presentation {data-navmenu="Menu"}
+=====================================
+
 Column {data-width=400}
 -----------------------------------------------------------------------
 
@@ -50,7 +67,7 @@ Depuis 1, 754 espèces se sont éteintes.
 Column {data-width=600}
 -----------------------------------------------------------------------
 
-### Evolution du nombre d'espèces étudiés et menacés
+### Evolution du nombre d'espèces étudiées et menacees
 
 ```{r}
 time = unci %>% 
@@ -92,7 +109,7 @@ ggplotly(organisms)
 
 ```{r}
 vertebrates = unci %>%
-  filter(year == 2019 & organisms == "VERTEBRATES") %>%
+  filter(year == 2019 & toupper(organisms) == "VERTEBRATES") %>%
   mutate(described = described-threated) %>%
   gather( key = "evalued", value = "speciesNb", 5:6) %>%
   ggplot( aes( x = reorder(species, speciesNb), y = speciesNb, fill = evalued))  +
@@ -102,4 +119,41 @@ vertebrates = unci %>%
   theme_minimal() +
   xlab("")
 ggplotly(vertebrates)
+```
+
+Par pays {data-navmenu="Menu"}
+=====================================
+
+### Nombre d espèces menacées par pays
+
+```{r}
+pays = monde %>%
+  left_join(paysNom, by = c('ADMIN' = 'country1')) %>%
+  left_join(threated, by = c('country2' = 'country'))
+pays = simplify(pays)
+
+couches = colnames(pays@data[,9:ncol(pays@data)])
+cartes = leaflet(pays) %>%
+  setView(lng = 7, lat = 45, zoom = 5) %>%
+  addLayersControl( baseGroups = couches, options = layersControlOptions(collapsed = FALSE))
+
+for( i in couches ){
+  nb = pays@data[,i]
+  discret = discretize(nb, method = "cluster", )
+  couleurs = discret
+  levels(couleurs) = brewer.pal(length(levels(discret)), "YlOrRd")
+  assign(i, data.frame(
+                  nbre = nb,
+                  discret = discret,
+                  couleurs = couleurs
+                  ))
+  assign(paste("label",i,sep=""), sprintf( paste("<strong>%s</strong><br/>", i, "=", '%g'),  pays$ADMIN, nb ) %>% lapply(htmltools::HTML))
+  cartes = cartes %>%
+    addPolygons(
+      fillColor = get(i)$couleurs, weight = 1, color = "white", fillOpacity = 0.6, label =  get(paste("label",i,sep="")),
+      highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE),
+      labelOptions = labelOptions(style = list("font-weight" = "normal", padding = "3px 8px"), textsize = "15px", direction = "auto"), group = i
+    )
+}
+cartes
 ```
